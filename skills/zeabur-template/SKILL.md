@@ -484,6 +484,65 @@ See `references/complexity-levels.md` for the 5-level complexity guide (single s
    ```
    Common pitfall: wrong branch name in `raw.githubusercontent.com` URLs (`develop` vs `main` vs `master`).
 
+## Variable Schema (real shape — verified against `template create` validator)
+
+Top-level `spec.variables[]` and `localization.<lang>.variables[]` use this exact shape. The template publish validator will reject anything else.
+
+```yaml
+variables:
+  - key: DATABASE_URL              # required, UPPER_SNAKE_CASE, do NOT translate
+    type: STRING                   # required, see allowed values below
+    name: Database URL             # required, human label, translatable
+    description: Postgres DSN      # required, translatable
+```
+
+### Allowed `type` values
+
+| `type`        | Use for                                                              |
+|---------------|----------------------------------------------------------------------|
+| `STRING`      | Plain text input (default for most env vars)                         |
+| `PASSWORD`    | Secret input — UI masks the field. **Use this instead of `secret: true`.** |
+| `DOMAIN`      | Bound to a port via `domainKey` on a service                         |
+| `AI_HUB_KEY`  | Auto-injects a Zeabur AI Hub key. **Undocumented previously.**       |
+
+### Common mistakes the validator rejects
+
+| Wrong                              | Right                                            |
+|------------------------------------|--------------------------------------------------|
+| `secret: true`                     | `type: PASSWORD`                                 |
+| `type: BOOL` / `type: NUMBER`      | `type: STRING` (no scalar types yet)             |
+| `{name, value}` only               | Must include `key`, `type`, `name`, `description` |
+| Translating `key` in `localization`| Only translate `name` and `description`          |
+
+### `metadata` shape
+
+`metadata` only accepts `name`. There is **no** `metadata.version` field — `template create` will reject it. Versioning lives in your VCS / template-backup, not in the YAML.
+
+```yaml
+# WRONG -- schema rejects metadata.version
+metadata:
+  name: MyApp
+  version: 1.0.0
+
+# CORRECT
+metadata:
+  name: MyApp
+```
+
+### `image` field cannot be a top-level `${VAR}` reference
+
+`spec.services[].spec.source.image` is validated as a docker reference (`<registry>/<name>:<tag>`). A bare `${VAR}` placeholder fails the docker-ref regex even though the rest of the YAML supports envsubst. Inline the literal image, or template the entire YAML before publishing.
+
+```yaml
+# WRONG -- rejected by validator
+source:
+  image: ${IMAGE_REF}
+
+# CORRECT
+source:
+  image: ghcr.io/myorg/myapp:1.2.3
+```
+
 ## Localization Requirements
 
 6 languages required: en-US (in `spec`), zh-TW, zh-CN, ja-JP, es-ES, id-ID.
