@@ -149,3 +149,48 @@ Only guide the user through this flow when they specifically ask for Git-based d
 - For static sites, Zeabur auto-detects and serves them correctly.
 - **Always save both Project ID and Service ID** after first deploy. This prevents duplicate services on redeploy.
 - After deployment, use the `zeabur-deployment-logs` skill to check build and runtime logs.
+
+## Known Issue: zbpack `npm update -g npm` crash
+
+Symptom (observed in phosphor-web on node:22 buildpack):
+
+```
+Step N/M : RUN npm update -g npm
+...
+Error: Cannot find module 'promise-retry'
+Require stack:
+  - /usr/local/lib/node_modules/npm/node_modules/@npmcli/arborist/...
+```
+
+zbpack injects `RUN npm update -g npm` as a hardening measure, but on
+recent `node:22-*` images the bundled npm's arborist dep tree is broken
+and the self-update aborts the whole build.
+
+**Workaround:** ship an app-level `Dockerfile` at the build root. zbpack
+respects a user-provided Dockerfile and will skip the problematic step.
+Minimal template:
+
+```dockerfile
+FROM node:22-bookworm-slim AS builder
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci --no-audit --no-fund
+COPY . .
+RUN npm run build
+
+FROM node:22-bookworm-slim AS runner
+ENV NODE_ENV=production
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends tini \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app /app
+EXPOSE 8080
+ENV PORT=8080
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["sh", "-c", "node_modules/.bin/next start -p ${PORT:-8080} -H 0.0.0.0"]
+```
+
+When troubleshooting a Zeabur build that fails at `RUN npm update -g
+npm`, the first fix is: "add an app-level Dockerfile that bypasses the
+self-update step." Do not retry the buildpack — it will fail the same
+way every time until upstream npm ships a fixed arborist.
