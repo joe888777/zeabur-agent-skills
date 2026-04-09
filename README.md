@@ -60,7 +60,6 @@ codex --plugin-dir /path/to/agent-skills
 | `zeabur-domain-register` | Search, purchase, renew, and manage registered domains | Buying domains, checking availability, renewal |
 | `zeabur-domain-dns` | Manage DNS records for registered domains | Adding/updating/deleting DNS records |
 | `zeabur-auth` | Login, logout, and check auth status | User says "login", "登入", "logout", "登出" |
-| `zeabur-domain-registrant` | Manage registrant profiles for domain registration | Creating/updating contact info for domains |
 
 ## Changelog
 
