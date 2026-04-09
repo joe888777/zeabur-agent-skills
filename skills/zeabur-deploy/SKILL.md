@@ -149,3 +149,31 @@ Only guide the user through this flow when they specifically ask for Git-based d
 - For static sites, Zeabur auto-detects and serves them correctly.
 - **Always save both Project ID and Service ID** after first deploy. This prevents duplicate services on redeploy.
 - After deployment, use the `zeabur-deployment-logs` skill to check build and runtime logs.
+
+## Common Footguns
+
+### Positional path ignored — deploy uploads cwd
+
+`zeabur deploy` does **not** take a positional path argument. This is wrong:
+
+```bash
+# WRONG -- the "apps/web" is silently dropped; cwd is uploaded
+npx zeabur@latest deploy --project-id X --service-id Y --json apps/web
+```
+
+Always `cd` into the target directory first:
+
+```bash
+cd apps/web
+npx zeabur@latest deploy --project-id X --service-id Y --json
+```
+
+**Symptom when you get it wrong:** the build "succeeds" with `status: success`, but the deployed container is a static Caddy file-server (if zbpack scanned the monorepo root and misclassified it) or the wrong service entirely. The public URL returns 404 on every route. CLI exit code is 0 the entire time.
+
+**Diagnosis:** `npx zeabur@latest service exec --id <svc> -- ps aux` — if PID 1 is `caddy run --config /etc/caddy/Caddyfile` and you expected Node.js or your own Dockerfile, you hit this trap.
+
+**Fix:** always smoke-test the public URL with `curl` after every deploy. Never trust the CLI's `"status": "success"` as end-to-end verification:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://<service>.zeabur.app/
+```
